@@ -7,6 +7,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const path = require('path');
 const connectDB = require('./config/database');
 
 const app = express();
@@ -16,7 +17,10 @@ const PORT = process.env.PORT || 3003;
 connectDB();
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false, // Disable for Telegram Mini App
+  crossOriginEmbedderPolicy: false
+}));
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -28,6 +32,9 @@ if (process.env.NODE_ENV === 'development') {
     next();
   });
 }
+
+// Serve static files from catalog-mini-app
+app.use(express.static(path.join(__dirname, '../catalog-mini-app')));
 
 // Health check
 app.get('/health', (req, res) => {
@@ -44,26 +51,18 @@ app.use('/api/courses', require('./api/courses'));
 app.use('/api/categories', require('./api/categories'));
 app.use('/api/analytics', require('./api/analytics'));
 
-// Root endpoint
-app.get('/', (req, res) => {
-  res.json({
-    service: 'Catalog Mini App API',
-    version: '1.0.0',
-    endpoints: {
-      courses: '/api/courses',
-      categories: '/api/categories',
-      analytics: '/api/analytics',
-      health: '/health'
-    }
-  });
-});
-
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    error: 'Route not found'
-  });
+// Serve index.html for root and any non-API routes (SPA routing)
+app.get('*', (req, res) => {
+  // Skip API routes
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({
+      success: false,
+      error: 'API route not found'
+    });
+  }
+  
+  // Serve index.html for all other routes
+  res.sendFile(path.join(__dirname, '../catalog-mini-app/index.html'));
 });
 
 // Error handler
@@ -83,6 +82,7 @@ app.listen(PORT, () => {
   console.log(`📍 Port: ${PORT}`);
   console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🌐 API Base: http://localhost:${PORT}/api`);
+  console.log(`📱 Mini App: http://localhost:${PORT}`);
   console.log('='.repeat(50) + '\n');
 });
 
